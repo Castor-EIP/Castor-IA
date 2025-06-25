@@ -1,0 +1,173 @@
+name: Vérification des ressources système
+
+on:
+  push:
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+  schedule:
+    # Exécuter tous les lundis à 9h00 UTC
+    - cron: '0 9 * * 1'
+
+jobs:
+  check-system-resources:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout du code
+      uses: actions/checkout@v4
+      
+    - name: Informations système de base
+      run: |
+        echo "🖥️  Informations système pour YOLO Detection"
+        echo "=============================================="
+        echo ""
+        
+        echo "📊 Processeur:"
+        lscpu | grep "Model name" | head -1
+        echo "Cœurs disponibles: $(nproc)"
+        echo ""
+        
+        echo "🧠 Mémoire:"
+        free -h
+        echo ""
+        
+        echo "💾 Espace disque:"
+        df -h | head -2
+        echo ""
+        
+    - name: Vérification des dépendances vidéo
+      run: |
+        echo "📹 Vérification du support vidéo pour OpenCV"
+        echo "============================================"
+        
+        # Installer les outils nécessaires
+        sudo apt-get update -qq
+        sudo apt-get install -y v4l-utils ffmpeg
+        
+        echo "✅ Pilotes vidéo installés"
+        echo ""
+        
+        echo "🎥 Périphériques vidéo disponibles:"
+        if ls /dev/video* 2>/dev/null; then
+          echo "Périphériques trouvés !"
+        else
+          echo "Aucun périphérique vidéo physique (normal en CI)"
+        fi
+        echo ""
+        
+        echo "🔧 Codecs vidéo disponibles:"
+        ffmpeg -codecs 2>/dev/null | grep -E "(h264|mjpeg|rawvideo)" | head -5
+        
+    - name: Test de performance réseau
+      run: |
+        echo "🌐 Test de connectivité réseau"
+        echo "============================="
+        
+        echo "📡 Test de ping vers des serveurs communs:"
+        ping -c 3 8.8.8.8 || echo "Ping Google DNS échoué"
+        echo ""
+        
+        echo "🏠 Test de connectivité locale (simulation IP caméra):"
+        echo "IP caméra configurée: 10.67.164.84:4747"
+        echo "⚠️  Test réel impossible en CI (réseau isolé)"
+        echo ""
+        
+        echo "⏱️  Latence réseau locale simulée:"
+        ping -c 2 localhost | tail -1
+        
+    - name: Test simple de performance
+      run: |
+        echo "⚡ Test de performance CPU pour YOLO"
+        echo "==================================="
+        
+        echo "🧮 Test de calcul simple:"
+        time python3 -c "sum(i*i for i in range(100000))"
+        
+        echo ""
+        echo "📈 Utilisation CPU:"
+        top -bn1 | grep "Cpu(s)" | head -1
+        
+    - name: Vérification de l'espace pour les modèles YOLO
+      run: |
+        echo "📦 Vérification de l'espace pour les modèles YOLO"
+        echo "=============================================="
+        
+        echo "💾 Espace disque disponible:"
+        df -h . | tail -1
+        echo ""
+        
+        echo "📋 Tailles typiques des modèles YOLO:"
+        echo "- yolo11n.pt: ~6 MB (nano)"
+        echo "- yolo11s.pt: ~22 MB (small)"
+        echo "- yolo11m.pt: ~50 MB (medium)"
+        echo "- yolo11l.pt: ~88 MB (large)"
+        echo "- yolo11x.pt: ~136 MB (extra-large)"
+        echo ""
+        
+        # Vérifier si on a assez d'espace pour les gros modèles
+        available_mb=$(df . | tail -1 | awk '{print int($4/1024)}')
+        echo "🔍 Espace disponible: ${available_mb} MB"
+        
+        if [ $available_mb -gt 150 ]; then
+          echo "✅ Assez d'espace pour tous les modèles YOLO"
+        elif [ $available_mb -gt 50 ]; then
+          echo "⚠️  Espace suffisant pour les modèles petits/moyens"
+        else
+          echo "❌ Espace insuffisant pour les gros modèles"
+        fi
+        
+    - name: Génération du rapport système simple
+      run: |
+        echo "📋 Génération du rapport système"
+        echo "==============================="
+        
+        echo "# Rapport des ressources système pour YOLO Detection" > system_report.md
+        echo "" >> system_report.md
+        echo "## Informations générales" >> system_report.md
+        echo "- **Date**: $(date)" >> system_report.md
+        echo "- **Système**: Ubuntu (GitHub Actions)" >> system_report.md
+        echo "- **Architecture**: $(uname -m)" >> system_report.md
+        echo "" >> system_report.md
+        echo "## Performance" >> system_report.md
+        echo "- **Processeurs**: $(nproc) cœurs" >> system_report.md
+        echo "- **Mémoire totale**: $(free -h | grep Mem | awk '{print $2}')" >> system_report.md
+        echo "- **Espace disque**: $(df -h . | tail -1 | awk '{print $4}') disponible" >> system_report.md
+        echo "" >> system_report.md
+        echo "## Recommandations pour YOLO" >> system_report.md
+        echo "- **Modèle recommandé**: yolo11n.pt (équilibre performance/précision)" >> system_report.md
+        echo "- **Résolution suggérée**: 640x480 pour temps réel" >> system_report.md
+        echo "- **FPS attendu**: 15-30 FPS selon le hardware" >> system_report.md
+        echo "" >> system_report.md
+        echo "## Notes" >> system_report.md
+        echo "- Test effectué en environnement CI" >> system_report.md
+        echo "- Performance réelle peut varier selon le hardware local" >> system_report.md
+        echo "- Caméras physiques non testables en CI" >> system_report.md
+        
+        echo "📄 Contenu du rapport:"
+        cat system_report.md
+        
+    - name: Badge de statut
+      run: |
+        echo "🏆 Badge de statut du système"
+        echo "=========================="
+        
+        cpu_cores=$(nproc)
+        memory_gb=$(free -g | grep Mem | awk '{print $2}')
+        
+        if [ $cpu_cores -ge 2 ] && [ $memory_gb -ge 4 ]; then
+          echo "🟢 SYSTÈME: Optimal pour YOLO"
+          echo "status=optimal" >> $GITHUB_ENV
+        elif [ $cpu_cores -ge 1 ] && [ $memory_gb -ge 2 ]; then
+          echo "🟡 SYSTÈME: Acceptable pour YOLO"
+          echo "status=acceptable" >> $GITHUB_ENV
+        else
+          echo "🔴 SYSTÈME: Limité pour YOLO"
+          echo "status=limited" >> $GITHUB_ENV
+        fi
+        
+    - name: Upload du rapport système
+      uses: actions/upload-artifact@v3
+      with:
+        name: system-performance-report
+        path: system_report.md
