@@ -2,13 +2,8 @@ name: Vérification de la syntaxe Python
 
 on:
   push:
-    branches: [ main, master ]
-    paths:
-      - '**/*.py'
   pull_request:
     branches: [ main, master ]
-    paths:
-      - '**/*.py'
   workflow_dispatch:
 
 jobs:

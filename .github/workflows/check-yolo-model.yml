@@ -1,0 +1,205 @@
+name: Vérification du modèle YOLO
+
+on:
+  push:
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  check-yolo-model:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout du code
+      uses: actions/checkout@v4
+      
+    - name: Vérification du modèle YOLO dans le code
+      run: |
+        echo "🤖 Vérification du modèle YOLO utilisé"
+        echo "====================================="
+        echo ""
+        
+        # Chercher tous les fichiers Python
+        python_files=$(find . -name "*.py" -type f | grep -v __pycache__)
+        
+        if [ -z "$python_files" ]; then
+          echo "❌ Aucun fichier Python trouvé"
+          exit 1
+        fi
+        
+        echo "📋 Fichiers Python à analyser:"
+        echo "$python_files"
+        echo ""
+        
+        # Vérifier la présence de yolo11n.pt
+        echo "🔍 Recherche du modèle YOLO11n.pt..."
+        
+        yolo11n_found=false
+        other_models_found=false
+        
+        for file in $python_files; do
+          echo "📄 Analyse de: $file"
+          
+          # Chercher yolo11n.pt (case insensitive)
+          if grep -i "yolo11n\.pt" "$file" >/dev/null 2>&1; then
+            echo "  ✅ yolo11n.pt trouvé !"
+            yolo11n_found=true
+            
+            # Afficher les lignes contenant le modèle
+            echo "  📍 Lignes trouvées:"
+            grep -n -i "yolo11n\.pt" "$file" | sed 's/^/    /'
+          fi
+          
+          # Chercher d'autres modèles YOLO
+          if grep -E "(yolo11[smlx]\.pt|yolo8|yolo5|yolov)" "$file" >/dev/null 2>&1; then
+            echo "  ⚠️  Autres modèles YOLO détectés:"
+            grep -n -E "(yolo11[smlx]\.pt|yolo8|yolo5|yolov)" "$file" | sed 's/^/    /'
+            other_models_found=true
+          fi
+          
+          echo ""
+        done
+        
+        echo "📊 Résumé de la vérification:"
+        echo "=========================="
+        
+        if [ "$yolo11n_found" = true ]; then
+          echo "✅ YOLO11n.pt correctement utilisé"
+        else
+          echo "❌ YOLO11n.pt NON trouvé dans le code"
+        fi
+        
+        if [ "$other_models_found" = true ]; then
+          echo "⚠️  D'autres modèles YOLO ont été détectés"
+        else
+          echo "✅ Aucun autre modèle YOLO détecté"
+        fi
+        
+        # Échec si yolo11n.pt n'est pas trouvé
+        if [ "$yolo11n_found" = false ]; then
+          echo ""
+          echo "❌ ERREUR: Le modèle YOLO11n.pt n'est pas utilisé !"
+          echo "📋 Modèles recommandés par ordre de priorité:"
+          echo "  1. yolo11n.pt (nano - recommandé pour temps réel)"
+          echo "  2. yolo11s.pt (small - bon compromis)"
+          echo "  3. yolo11m.pt (medium - plus précis)"
+          exit 1
+        fi
+        
+        echo ""
+        echo "🎉 Vérification du modèle YOLO réussie !"
+        
+    - name: Vérification de la syntaxe d'importation YOLO
+      run: |
+        echo "📦 Vérification de l'importation YOLO"
+        echo "====================================="
+        
+        # Chercher les imports YOLO
+        echo "🔍 Recherche des imports YOLO..."
+        
+        import_found=false
+        correct_import=false
+        
+        for file in $(find . -name "*.py" -type f | grep -v __pycache__); do
+          echo "📄 Vérification des imports dans: $file"
+          
+          # Chercher l'import YOLO
+          if grep "from ultralytics import YOLO" "$file" >/dev/null 2>&1; then
+            echo "  ✅ Import YOLO correct trouvé"
+            import_found=true
+            correct_import=true
+            grep -n "from ultralytics import YOLO" "$file" | sed 's/^/    /'
+          elif grep "import.*YOLO" "$file" >/dev/null 2>&1; then
+            echo "  ⚠️  Import YOLO trouvé (mais vérifier la syntaxe)"
+            import_found=true
+            grep -n "import.*YOLO" "$file" | sed 's/^/    /'
+          fi
+          echo ""
+        done
+        
+        echo "📊 Résumé des imports:"
+        if [ "$correct_import" = true ]; then
+          echo "✅ Import YOLO correct: 'from ultralytics import YOLO'"
+        elif [ "$import_found" = true ]; then
+          echo "⚠️  Import YOLO trouvé mais à vérifier"
+        else
+          echo "❌ Aucun import YOLO trouvé"
+          echo "💡 Import recommandé: 'from ultralytics import YOLO'"
+        fi
+        
+    - name: Vérification de l'initialisation du modèle
+      run: |
+        echo "⚙️  Vérification de l'initialisation du modèle"
+        echo "=============================================="
+        
+        # Chercher l'initialisation YOLO
+        echo "🔍 Recherche de l'initialisation YOLO('yolo11n.pt')..."
+        
+        init_found=false
+        
+        for file in $(find . -name "*.py" -type f | grep -v __pycache__); do
+          echo "📄 Vérification dans: $file"
+          
+          # Chercher YOLO("yolo11n.pt")
+          if grep -E 'YOLO\s*\(\s*["\']yolo11n\.pt["\']' "$file" >/dev/null 2>&1; then
+            echo "  ✅ Initialisation correcte trouvée !"
+            init_found=true
+            grep -n -E 'YOLO\s*\(\s*["\']yolo11n\.pt["\']' "$file" | sed 's/^/    /'
+          fi
+          
+          # Chercher d'autres initialisations YOLO
+          if grep -E 'YOLO\s*\(' "$file" >/dev/null 2>&1; then
+            echo "  📍 Initialisations YOLO trouvées:"
+            grep -n -E 'YOLO\s*\(' "$file" | sed 's/^/    /'
+          fi
+          echo ""
+        done
+        
+        if [ "$init_found" = true ]; then
+          echo "✅ Initialisation YOLO('yolo11n.pt') correcte"
+        else
+          echo "⚠️  Initialisation YOLO('yolo11n.pt') non trouvée explicitement"
+          echo "💡 Pattern attendu: model = YOLO('yolo11n.pt')"
+        fi
+        
+    - name: Génération du rapport de vérification YOLO
+      run: |
+        echo "📋 Génération du rapport de vérification"
+        echo "======================================="
+        
+        echo "# 🤖 Rapport de vérification modèle YOLO" > yolo_check_report.md
+        echo "" >> yolo_check_report.md
+        echo "## 📊 Résumé" >> yolo_check_report.md
+        echo "- **Date**: $(date)" >> yolo_check_report.md
+        echo "- **Branche**: ${{ github.ref_name }}" >> yolo_check_report.md
+        echo "- **Commit**: ${{ github.sha }}" >> yolo_check_report.md
+        echo "" >> yolo_check_report.md
+        
+        echo "## ✅ Vérifications effectuées" >> yolo_check_report.md
+        echo "1. **Présence du modèle yolo11n.pt** dans le code" >> yolo_check_report.md
+        echo "2. **Import YOLO** correct depuis ultralytics" >> yolo_check_report.md
+        echo "3. **Initialisation du modèle** YOLO" >> yolo_check_report.md
+        echo "4. **Détection d'autres modèles** non recommandés" >> yolo_check_report.md
+        echo "" >> yolo_check_report.md
+        
+        echo "## 🎯 Modèle recommandé" >> yolo_check_report.md
+        echo "- **yolo11n.pt** (YOLO11 Nano)" >> yolo_check_report.md
+        echo "- Taille: ~6 MB" >> yolo_check_report.md
+        echo "- Performance: Optimisée pour temps réel" >> yolo_check_report.md
+        echo "- Précision: Bonne pour la détection générale" >> yolo_check_report.md
+        echo "" >> yolo_check_report.md
+        
+        echo "## 📁 Fichiers analysés" >> yolo_check_report.md
+        echo '```' >> yolo_check_report.md
+        find . -name "*.py" -type f | grep -v __pycache__ >> yolo_check_report.md
+        echo '```' >> yolo_check_report.md
+        
+        echo "📄 Contenu du rapport:"
+        cat yolo_check_report.md
+        
+    - name: Upload du rapport YOLO
+      uses: actions/upload-artifact@v3
+      with:
+        name: yolo-model-check-report
+        path: yolo_check_report.md

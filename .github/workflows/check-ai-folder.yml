@@ -3,7 +3,6 @@ name: Vérification du dossier AI
 # Déclencher l'action sur push et pull request vers main
 on:
   push:
-    branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
 

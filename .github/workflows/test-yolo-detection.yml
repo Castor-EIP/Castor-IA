@@ -2,14 +2,8 @@ name: Test et validation du système de détection YOLO
 
 on:
   push:
-    branches: [ main, master ]
-    paths: 
-      - 'ai/**'
-      - '.github/workflows/**'
   pull_request:
     branches: [ main, master ]
-    paths:
-      - 'ai/**'
   workflow_dispatch:
 
 jobs:
