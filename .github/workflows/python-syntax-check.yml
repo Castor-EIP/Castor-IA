@@ -1,0 +1,166 @@
+name: Vérification de la syntaxe Python
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - '**/*.py'
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - '**/*.py'
+  workflow_dispatch:
+
+jobs:
+  check-python-syntax:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout du code
+      uses: actions/checkout@v4
+      
+    - name: Configuration de Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Recherche des fichiers Python
+      id: find-python-files
+      run: |
+        echo "🔍 Recherche des fichiers Python dans le projet..."
+        python_files=$(find . -name "*.py" -type f | grep -v __pycache__ | sort)
+        
+        if [ -z "$python_files" ]; then
+          echo "⚠️  Aucun fichier Python trouvé dans le projet"
+          echo "has_python_files=false" >> $GITHUB_OUTPUT
+        else
+          echo "📋 Fichiers Python détectés:"
+          echo "$python_files"
+          echo "has_python_files=true" >> $GITHUB_OUTPUT
+          
+          # Sauvegarder la liste des fichiers pour les étapes suivantes
+          echo "$python_files" > python_files_list.txt
+        fi
+        
+    - name: Vérification de la syntaxe Python avec py_compile
+      if: steps.find-python-files.outputs.has_python_files == 'true'
+      run: |
+        echo "🐍 Vérification de la syntaxe Python avec py_compile..."
+        
+        syntax_errors=0
+        total_files=0
+        
+        while IFS= read -r file; do
+          if [ -n "$file" ]; then
+            total_files=$((total_files + 1))
+            echo "📄 Vérification de: $file"
+            
+            if python -m py_compile "$file" 2>/dev/null; then
+              echo "  ✅ Syntaxe correcte"
+            else
+              echo "  ❌ Erreur de syntaxe détectée!"
+              python -m py_compile "$file" 2>&1 | sed 's/^/    /'
+              syntax_errors=$((syntax_errors + 1))
+            fi
+            echo ""
+          fi
+        done < python_files_list.txt
+        
+        echo "📊 Résumé de la vérification py_compile:"
+        echo "- Total de fichiers vérifiés: $total_files"
+        echo "- Fichiers avec erreurs: $syntax_errors"
+        echo "- Fichiers corrects: $((total_files - syntax_errors))"
+        
+        if [ $syntax_errors -gt 0 ]; then
+          echo ""
+          echo "❌ $syntax_errors fichier(s) contiennent des erreurs de syntaxe!"
+          exit 1
+        else
+          echo ""
+          echo "🎉 Tous les fichiers Python ont une syntaxe correcte!"
+        fi
+        
+    - name: Vérification avec flake8 (optionnel)
+      if: steps.find-python-files.outputs.has_python_files == 'true'
+      run: |
+        echo "� Installation et utilisation de flake8 pour vérification supplémentaire..."
+        pip install flake8
+        
+        echo "📊 Vérification avec flake8 (syntaxe et style basique)..."
+        if flake8 --select=E9,F63,F7,F82 --show-source --statistics $(cat python_files_list.txt); then
+          echo "✅ Aucune erreur de syntaxe critique détectée par flake8"
+        else
+          echo "❌ Des erreurs critiques ont été détectées par flake8"
+          exit 1
+        fi
+        
+    - name: Test d'import des modules
+      if: steps.find-python-files.outputs.has_python_files == 'true'
+      run: |
+        echo "� Test d'import des modules Python..."
+        
+        import_errors=0
+        
+        while IFS= read -r file; do
+          if [ -n "$file" ]; then
+            echo "📄 Test d'import pour: $file"
+            
+            # Essayer d'importer le module
+            module_path=$(echo "$file" | sed 's|./||' | sed 's|/|.|g' | sed 's|.py||')
+            
+            if python -c "import sys; sys.path.insert(0, '.'); import $module_path" 2>/dev/null; then
+              echo "  ✅ Import réussi"
+            else
+              echo "  ⚠️  Import échoué (peut être normal si dépendances manquantes)"
+              import_errors=$((import_errors + 1))
+            fi
+          fi
+        done < python_files_list.txt
+        
+        echo ""
+        echo "📊 Résumé des tests d'import:"
+        echo "- Imports échoués: $import_errors (normal si dépendances externes)"
+        
+    - name: Rapport de syntaxe
+      if: always() && steps.find-python-files.outputs.has_python_files == 'true'
+      run: |
+        echo "📋 Génération du rapport de syntaxe..."
+        
+        echo "# 🐍 Rapport de vérification syntaxe Python" > syntax_report.md
+        echo "" >> syntax_report.md
+        echo "## 📊 Résumé" >> syntax_report.md
+        echo "" >> syntax_report.md
+        
+        if [ -f python_files_list.txt ]; then
+          file_count=$(wc -l < python_files_list.txt)
+          echo "- **Fichiers Python analysés:** $file_count" >> syntax_report.md
+        fi
+        
+        echo "- **Date d'analyse:** $(date)" >> syntax_report.md
+        echo "- **Branche:** ${{ github.ref_name }}" >> syntax_report.md
+        echo "- **Commit:** ${{ github.sha }}" >> syntax_report.md
+        echo "" >> syntax_report.md
+        
+        echo "## 📁 Fichiers analysés" >> syntax_report.md
+        echo "" >> syntax_report.md
+        echo '```' >> syntax_report.md
+        if [ -f python_files_list.txt ]; then
+          cat python_files_list.txt >> syntax_report.md
+        fi
+        echo '```' >> syntax_report.md
+        
+        echo "" >> syntax_report.md
+        echo "## ✅ Vérifications effectuées" >> syntax_report.md
+        echo "" >> syntax_report.md
+        echo "1. **py_compile** - Compilation Python standard" >> syntax_report.md
+        echo "2. **flake8** - Vérification des erreurs critiques" >> syntax_report.md
+        echo "3. **Test d'import** - Vérification des imports de base" >> syntax_report.md
+        
+        cat syntax_report.md
+        
+    - name: Upload du rapport de syntaxe
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: python-syntax-report
+        path: syntax_report.md
