@@ -1,0 +1,48 @@
+name: Vérification du dossier AI
+
+# Déclencher l'action sur push et pull request vers main
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+# Permettre l'exécution manuelle du workflow
+  workflow_dispatch:
+
+jobs:
+  check-ai-folder:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout du code
+      uses: actions/checkout@v4
+      
+    - name: Vérifier la présence du dossier 'ai'
+      run: |
+        echo "🔍 Vérification de la présence du dossier 'ai' à la racine du repository..."
+        
+        if [ -d "ai" ]; then
+          echo "✅ Le dossier 'ai' est présent à la racine du repository"
+          echo "📁 Contenu du dossier 'ai':"
+          ls -la ai/
+          exit 0
+        else
+          echo "❌ ERREUR: Le dossier 'ai' n'est pas présent à la racine du repository"
+          echo "📂 Structure actuelle de la racine:"
+          ls -la
+          exit 1
+        fi
+        
+    - name: Vérifier que le dossier 'ai' contient des fichiers
+      run: |
+        echo "🔍 Vérification que le dossier 'ai' n'est pas vide..."
+        
+        if [ "$(ls -A ai)" ]; then
+          echo "✅ Le dossier 'ai' contient des fichiers"
+          echo "📋 Liste des fichiers dans 'ai':"
+          find ai -type f -name "*.py" | head -10
+        else
+          echo "⚠️  ATTENTION: Le dossier 'ai' est vide"
+          exit 1
+        fi
